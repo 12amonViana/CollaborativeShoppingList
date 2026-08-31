@@ -3,7 +3,6 @@ package com.collaborativeshoppinglist.feature.invitations
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.collaborativeshoppinglist.core.error.AppErrorMapper
-import com.collaborativeshoppinglist.data.model.Invitation
 import com.collaborativeshoppinglist.data.repository.InvitationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,10 +13,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class InvitationUiState(
-    val invitations: List<Invitation> = emptyList(),
-    val isLoading: Boolean = true,
+    val invitationCode: String? = null,
     val isWorking: Boolean = false,
-    val message: String? = null,
     val error: String? = null,
 )
 
@@ -28,56 +25,37 @@ class InvitationViewModel @Inject constructor(
     private val _state = MutableStateFlow(InvitationUiState())
     val state: StateFlow<InvitationUiState> = _state.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            runCatching {
-                repository.observePendingInvitations().collect { invitations ->
-                    _state.update {
-                        it.copy(invitations = invitations, isLoading = false, error = null)
-                    }
-                }
-            }.onFailure(::showError)
-        }
+    fun create(listId: String) = perform { code ->
+        repository.create(listId).also(code)
     }
 
-    fun create(listId: String, email: String) = perform("Convite enviado.") {
-        repository.create(listId, email)
+    fun accept(code: String, onAccepted: (String) -> Unit) = perform(onAccepted) {
+        repository.accept(code)
     }
 
-    fun accept(invitationId: String, onAccepted: (String) -> Unit) {
+    fun clearError() = _state.update { it.copy(error = null) }
+
+    private fun perform(onSuccess: (String) -> Unit = {}, action: suspend ((String) -> Unit) -> String) {
         if (_state.value.isWorking) return
         viewModelScope.launch {
             _state.update { it.copy(isWorking = true, error = null) }
-            runCatching { repository.accept(invitationId) }
-                .onSuccess { listId ->
-                    _state.update { it.copy(isWorking = false, message = "Convite aceito.") }
-                    onAccepted(listId)
-                }
-                .onFailure(::showError)
-        }
-    }
-
-    fun clearMessages() = _state.update { it.copy(message = null, error = null) }
-
-    private fun perform(successMessage: String, action: suspend () -> Unit) {
-        if (_state.value.isWorking) return
-        viewModelScope.launch {
-            _state.update { it.copy(isWorking = true, error = null, message = null) }
-            runCatching { action() }
-                .onSuccess {
-                    _state.update { it.copy(isWorking = false, message = successMessage) }
+            runCatching { action { code -> _state.update { it.copy(invitationCode = code) } } }
+                .onSuccess { result ->
+                    _state.update { it.copy(isWorking = false) }
+                    onSuccess(result)
                 }
                 .onFailure(::showError)
         }
     }
 
     private fun showError(error: Throwable) {
-        _state.update {
-            it.copy(
-                isLoading = false,
-                isWorking = false,
-                error = AppErrorMapper.from(error).message,
-            )
+        val message = when (error.message) {
+            "INVITATION_EXPIRED" -> "Este convite expirou."
+            "INVITATION_UNAVAILABLE" -> "Convite inválido, já utilizado ou indisponível."
+            "LIST_CLOSED" -> "A lista já foi encerrada."
+            "NOT_AUTHORIZED" -> "Você não tem permissão para esta ação."
+            else -> AppErrorMapper.from(error).message
         }
+        _state.update { it.copy(isWorking = false, error = message) }
     }
 }

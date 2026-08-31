@@ -2,7 +2,9 @@
 .gradle/
 .gradle-cache/
 .gradle-project-cache/
+.gradle-user/
 .android-user/
+.firebase-config/
 .build-logs/
 **/build/
 out/

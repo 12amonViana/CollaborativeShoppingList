@@ -56,10 +56,9 @@ class DeviceValidationTest {
         }
 
         click("Convidar")
-        waitForText("Convidar participante")
-        inputField(0).performTextInput(MEMBER_EMAIL)
-        click("Enviar convite")
-        waitForText("Convite enviado.")
+        waitForText("Compartilhar lista")
+        click("Gerar código")
+        waitForText("Código do convite")
         click("Voltar")
         waitForText("Participantes (1)")
     }
@@ -67,9 +66,8 @@ class DeviceValidationTest {
     @Test
     fun memberAcceptsAndMarksItem() {
         waitForText("Minhas listas")
-        click("Ver convites")
-        waitForText("Compra da semana", 40_000)
-        click("Aceitar")
+        click("Entrar com código")
+        waitForText("Código do convite", 40_000)
         waitForText("Leite", 40_000)
         waitForText("Participantes (2)")
 

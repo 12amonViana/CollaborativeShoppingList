@@ -9,9 +9,9 @@
 | Alterar quantidade | Participante | Lista ativa; quantidade inteira >= 1 | Atualiza a quantidade |
 | Marcar/desmarcar | Participante | Lista ativa | Atualiza inCart, autoria e horário |
 | Remover item | Participante | Lista ativa; item existe | Exclui o item |
-| Criar convite | Proprietário | Lista ativa; convidado registrado | Function cria convite pendente de 3 horas |
-| Aceitar convite | Convidado | Convite pendente, não expirado; lista ativa | Function cria participação e aceita convite |
-| Encerrar lista | Proprietário | Lista ativa | Fecha lista e invalida convites pendentes |
+| Criar convite | Proprietário | Lista ativa | Transação cria código aleatório pendente de 3 horas |
+| Aceitar convite | Usuário autenticado com o código | Convite pendente, não expirado; lista ativa | Transação cria participação, atualiza a lista e aceita convite |
+| Encerrar lista | Proprietário | Lista ativa | Transação fecha a lista; convites pendentes tornam-se inutilizáveis |
 
 Todas as operações de alteração são transacionais. Em alterações concorrentes do mesmo campo, a última transação confirmada pelo servidor vence.
 
@@ -25,9 +25,9 @@ O aplicativo mantém listeners apenas para listas das quais o usuário é partic
 - Um usuário só pode ler uma lista, seus itens e membros quando possui participação.
 - Apenas o proprietário pode encerrar lista e iniciar convite.
 - Participantes podem alterar itens somente enquanto a lista estiver ACTIVE.
-- O convidado só pode ler e aceitar um convite destinado ao seu e-mail autenticado.
+- Convites não podem ser listados; um usuário autenticado só pode buscar um documento quando já conhece seu código imprevisível.
 - As regras validam formato permitido, quantidade inteira de pelo menos 1 e campos de propriedade imutáveis.
-- O aplicativo não grava diretamente convites ou participações: as Cloud Functions autenticadas são responsáveis por essas operações.
+- Criação e aceite gravam diretamente no Firestore em operações atômicas; as regras exigem que convite, participação e lista mudem juntos e com campos imutáveis preservados.
 
 ## Erros Visíveis ao Usuário
 

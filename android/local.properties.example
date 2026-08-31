@@ -5,4 +5,3 @@ firebase.useEmulators=true
 firebase.emulatorHost=10.0.2.2
 firebase.authEmulatorPort=9099
 firebase.firestoreEmulatorPort=8080
-firebase.functionsEmulatorPort=5001

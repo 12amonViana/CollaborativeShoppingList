@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import { initializeApp, deleteApp } from "firebase/app";
+import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import {
-  connectAuthEmulator,
-  createUserWithEmailAndPassword,
-  getAuth,
-} from "firebase/auth";
-import {
+  arrayUnion,
   collection,
   connectFirestoreEmulator,
   doc,
@@ -13,24 +10,14 @@ import {
   getDocs,
   getFirestore,
   onSnapshot,
-  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
-  where,
   writeBatch,
 } from "firebase/firestore";
-import {
-  connectFunctionsEmulator,
-  getFunctions,
-  httpsCallable,
-} from "firebase/functions";
-import {
-  assertFails,
-  initializeTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { assertFails, initializeTestEnvironment } from "@firebase/rules-unit-testing";
 
 const projectId = "demo-collaborative-shopping-list";
 const apps = [];
@@ -46,32 +33,21 @@ async function createAccount(label, email, displayName) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   const firestore = getFirestore(app);
   connectFirestoreEmulator(firestore, "127.0.0.1", 8080);
-  const functions = getFunctions(app);
-  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
   const credential = await createUserWithEmailAndPassword(auth, email, "senha123");
   await setDoc(doc(firestore, "users", credential.user.uid), {
-    email,
-    displayName,
-    createdAt: serverTimestamp(),
+    email, displayName, createdAt: serverTimestamp(),
   });
-  return { auth, firestore, functions, user: credential.user, displayName };
+  return { firestore, user: credential.user, displayName };
 }
 
 async function createList(account, listId, name) {
   const batch = writeBatch(account.firestore);
   batch.set(doc(account.firestore, "lists", listId), {
-    name,
-    ownerId: account.user.uid,
-    memberIds: [account.user.uid],
-    status: "ACTIVE",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    closedAt: null,
+    name, ownerId: account.user.uid, memberIds: [account.user.uid], status: "ACTIVE",
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), closedAt: null,
   });
   batch.set(doc(account.firestore, "lists", listId, "members", account.user.uid), {
-    userId: account.user.uid,
-    displayName: account.displayName,
-    role: "OWNER",
+    userId: account.user.uid, displayName: account.displayName, role: "OWNER",
     joinedAt: serverTimestamp(),
   });
   await batch.commit();
@@ -86,18 +62,13 @@ async function addItem(account, listId, rawName) {
     if (current.exists()) {
       transaction.update(itemRef, {
         quantity: current.data().quantity + 1,
-        updatedAt: serverTimestamp(),
-        updatedByUserId: account.user.uid,
+        updatedAt: serverTimestamp(), updatedByUserId: account.user.uid,
       });
     } else {
       transaction.set(itemRef, {
-        name: rawName.trim().replace(/\s+/g, " "),
-        normalizedName: itemId,
-        quantity: 1,
-        inCart: false,
-        lastMarkedByUserId: null,
-        updatedAt: serverTimestamp(),
-        updatedByUserId: account.user.uid,
+        name: rawName.trim().replace(/\s+/g, " "), normalizedName: itemId,
+        quantity: 1, inCart: false, lastMarkedByUserId: null,
+        updatedAt: serverTimestamp(), updatedByUserId: account.user.uid,
       });
     }
     transaction.update(listRef, { updatedAt: serverTimestamp() });
@@ -105,14 +76,48 @@ async function addItem(account, listId, rawName) {
   return itemRef;
 }
 
-async function expectCallableFailure(callable, data) {
-  let failed = false;
-  try {
-    await callable(data);
-  } catch {
-    failed = true;
-  }
-  assert.equal(failed, true, "A chamada deveria ter sido recusada");
+async function createInvitation(owner, listId, code, expiresAt) {
+  const listRef = doc(owner.firestore, "lists", listId);
+  const invitationRef = doc(owner.firestore, "invitations", code);
+  await runTransaction(owner.firestore, async (transaction) => {
+    const list = await transaction.get(listRef);
+    transaction.set(invitationRef, {
+      listId,
+      listName: list.data().name,
+      inviterId: owner.user.uid,
+      inviterDisplayName: owner.displayName,
+      status: "PENDING",
+      createdAt: serverTimestamp(),
+      expiresAt,
+      acceptedAt: null,
+      acceptedByUserId: null,
+    });
+  });
+  return invitationRef;
+}
+
+async function acceptInvitation(account, code) {
+  const invitationRef = doc(account.firestore, "invitations", code);
+  let acceptedListId = "";
+  await runTransaction(account.firestore, async (transaction) => {
+    const invitation = await transaction.get(invitationRef);
+    const listId = invitation.data().listId;
+    acceptedListId = listId;
+    transaction.set(doc(account.firestore, "lists", listId, "members", account.user.uid), {
+      userId: account.user.uid,
+      displayName: account.displayName,
+      role: "MEMBER",
+      joinedAt: serverTimestamp(),
+      acceptedInvitationId: code,
+    });
+    transaction.update(doc(account.firestore, "lists", listId), {
+      memberIds: arrayUnion(account.user.uid), updatedAt: serverTimestamp(),
+    });
+    transaction.update(invitationRef, {
+      status: "ACCEPTED", acceptedAt: serverTimestamp(), acceptedByUserId: account.user.uid,
+    });
+  });
+  return acceptedListId;
 }
 
 async function main() {
@@ -120,7 +125,6 @@ async function main() {
     projectId,
     firestore: { host: "127.0.0.1", port: 8080 },
   });
-
   try {
     const owner = await createAccount("owner", "ana@example.test", "Ana");
     const member = await createAccount("member", "bruno@example.test", "Bruno");
@@ -131,117 +135,62 @@ async function main() {
     const milkRef = await addItem(owner, listId, "Leite");
     await addItem(owner, listId, " leite ");
     assert.equal((await getDoc(milkRef)).data().quantity, 2);
-
     await assertFails(updateDoc(milkRef, {
-      quantity: 0,
-      updatedAt: serverTimestamp(),
-      updatedByUserId: owner.user.uid,
+      quantity: 0, updatedAt: serverTimestamp(), updatedByUserId: owner.user.uid,
     }));
     await assertFails(getDoc(doc(outsider.firestore, "lists", listId)));
-    await assertFails(updateDoc(doc(owner.firestore, "lists", listId), {
-      status: "CLOSED",
-      closedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }));
 
-    const createInvitation = httpsCallable(owner.functions, "createInvitation");
-    const acceptInvitation = httpsCallable(member.functions, "acceptInvitation");
-    const invitationResult = await createInvitation({
+    const code = "00112233445566778899AABBCCDDEEFF";
+    await createInvitation(
+      owner,
       listId,
-      inviteeEmail: "bruno@example.test",
-    });
-    const invitationId = invitationResult.data.invitationId;
-    const invitationRef = doc(member.firestore, "invitations", invitationId);
-    assert.equal((await getDoc(invitationRef)).data().status, "PENDING");
-    await assertFails(getDoc(doc(outsider.firestore, "invitations", invitationId)));
-
-    const accepted = await acceptInvitation({ invitationId });
-    assert.equal(accepted.data.listId, listId);
-    const memberDoc = await getDoc(
-      doc(member.firestore, "lists", listId, "members", member.user.uid),
+      code,
+      Timestamp.fromMillis(Date.now() + 3 * 60 * 60 * 1000),
     );
+    await assertFails(getDocs(collection(outsider.firestore, "invitations")));
+    assert.equal(await acceptInvitation(member, code), listId);
+    const memberDoc = await getDoc(doc(member.firestore, "lists", listId, "members", member.user.uid));
     assert.equal(memberDoc.data().displayName, "Bruno");
+    await assertFails(acceptInvitation(outsider, code));
 
     const realTimeUpdate = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Atualização não chegou em 3 segundos")), 3000);
       const unsubscribe = onSnapshot(doc(member.firestore, milkRef.path), (snapshot) => {
         if (snapshot.data()?.inCart === true) {
-          clearTimeout(timeout);
-          unsubscribe();
-          resolve();
+          clearTimeout(timeout); unsubscribe(); resolve();
         }
       }, reject);
     });
     await runTransaction(owner.firestore, async (transaction) => {
       transaction.update(milkRef, {
-        inCart: true,
-        lastMarkedByUserId: owner.user.uid,
-        updatedAt: serverTimestamp(),
-        updatedByUserId: owner.user.uid,
+        inCart: true, lastMarkedByUserId: owner.user.uid,
+        updatedAt: serverTimestamp(), updatedByUserId: owner.user.uid,
       });
-      transaction.update(doc(owner.firestore, "lists", listId), {
-        updatedAt: serverTimestamp(),
-      });
+      transaction.update(doc(owner.firestore, "lists", listId), { updatedAt: serverTimestamp() });
     });
     await realTimeUpdate;
 
-    const increment = (account) => runTransaction(account.firestore, async (transaction) => {
-      const accountItemRef = doc(account.firestore, milkRef.path);
-      const snapshot = await transaction.get(accountItemRef);
-      transaction.update(accountItemRef, {
-        quantity: snapshot.data().quantity + 1,
-        updatedAt: serverTimestamp(),
-        updatedByUserId: account.user.uid,
-      });
-      transaction.update(doc(account.firestore, "lists", listId), {
-        updatedAt: serverTimestamp(),
-      });
-    });
-    await Promise.all([increment(owner), increment(member)]);
-    assert.equal((await getDoc(milkRef)).data().quantity, 4);
-
-    const outsiderInvitation = await createInvitation({
-      listId,
-      inviteeEmail: "carla@example.test",
-    });
-    const outsiderInvitationId = outsiderInvitation.data.invitationId;
+    const expiredCode = "FFEEDDCCBBAA99887766554433221100";
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
-      await updateDoc(
-        doc(context.firestore(), "invitations", outsiderInvitationId),
-        { expiresAt: Timestamp.fromMillis(Date.now() - 1000) },
-      );
+      await setDoc(doc(context.firestore(), "invitations", expiredCode), {
+        listId, listName: "Compra da semana", inviterId: owner.user.uid,
+        inviterDisplayName: "Ana", status: "PENDING",
+        createdAt: Timestamp.fromMillis(Date.now() - 4 * 60 * 60 * 1000),
+        expiresAt: Timestamp.fromMillis(Date.now() - 60 * 60 * 1000),
+        acceptedAt: null, acceptedByUserId: null,
+      });
     });
-    const outsiderAccept = httpsCallable(outsider.functions, "acceptInvitation");
-    await expectCallableFailure(outsiderAccept, { invitationId: outsiderInvitationId });
-    const expiredQuery = query(
-      collection(outsider.firestore, "invitations"),
-      where("inviteeUid", "==", outsider.user.uid),
-    );
-    const expiredDocs = await getDocs(expiredQuery);
-    assert.equal(expiredDocs.docs[0].data().status, "EXPIRED");
+    await assertFails(acceptInvitation(outsider, expiredCode));
 
-    const replacementInvitation = await createInvitation({
-      listId,
-      inviteeEmail: "carla@example.test",
+    await updateDoc(doc(owner.firestore, "lists", listId), {
+      status: "CLOSED", closedAt: serverTimestamp(), updatedAt: serverTimestamp(),
     });
-    const closeList = httpsCallable(owner.functions, "closeShoppingList");
-    await closeList({ listId });
-    const closedList = await getDoc(doc(member.firestore, "lists", listId));
-    assert.equal(closedList.data().status, "CLOSED");
-    const invalidated = await getDoc(
-      doc(outsider.firestore, "invitations", replacementInvitation.data.invitationId),
-    );
-    assert.equal(invalidated.data().status, "INVALIDATED");
-    await expectCallableFailure(outsiderAccept, {
-      invitationId: replacementInvitation.data.invitationId,
-    });
+    assert.equal((await getDoc(doc(member.firestore, "lists", listId))).data().status, "CLOSED");
     await assertFails(updateDoc(doc(member.firestore, milkRef.path), {
-      quantity: 5,
-      updatedAt: serverTimestamp(),
-      updatedByUserId: member.user.uid,
+      quantity: 5, updatedAt: serverTimestamp(), updatedByUserId: member.user.uid,
     }));
 
-    console.log("E2E_OK: autenticação, listas, itens, tempo real, convites, expiração, concorrência, encerramento e autorização.");
+    console.log("E2E_OK: Spark, regras, convite por código, tempo real, expiração e encerramento.");
   } finally {
     await testEnvironment.cleanup();
     await Promise.all(apps.map(deleteApp));

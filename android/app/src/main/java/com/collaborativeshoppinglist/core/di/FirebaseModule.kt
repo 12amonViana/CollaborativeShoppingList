@@ -3,7 +3,6 @@ package com.collaborativeshoppinglist.core.di
 import com.collaborativeshoppinglist.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,14 +31,4 @@ object FirebaseModule {
         }
     }
 
-    @Provides
-    @Singleton
-    fun provideFirebaseFunctions(): FirebaseFunctions = FirebaseFunctions.getInstance().apply {
-        if (BuildConfig.USE_FIREBASE_EMULATORS) {
-            useEmulator(
-                BuildConfig.FIREBASE_EMULATOR_HOST,
-                BuildConfig.FIREBASE_FUNCTIONS_EMULATOR_PORT,
-            )
-        }
-    }
 }

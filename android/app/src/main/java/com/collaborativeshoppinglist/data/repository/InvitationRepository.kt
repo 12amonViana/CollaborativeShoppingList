@@ -1,71 +1,118 @@
 package com.collaborativeshoppinglist.data.repository
 
-import com.collaborativeshoppinglist.data.model.Invitation
-import com.collaborativeshoppinglist.data.model.InvitationStatus
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.functions.FirebaseFunctions
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.security.SecureRandom
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class InvitationRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val functions: FirebaseFunctions,
     private val authRepository: AuthRepository,
 ) {
-    fun observePendingInvitations(): Flow<List<Invitation>> = callbackFlow {
-        val userId = requireNotNull(authRepository.currentUserId) { "Entre para continuar." }
-        val registration = firestore.collection("invitations")
-            .whereEqualTo("inviteeUid", userId)
-            .whereEqualTo("status", "PENDING")
-            .orderBy("expiresAt", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) close(error)
-                else {
-                    val invitations = snapshot?.documents.orEmpty().mapNotNull { document ->
-                        val listId = document.getString("listId") ?: return@mapNotNull null
-                        Invitation(
-                            id = document.id,
-                            listId = listId,
-                            listName = document.getString("listName").orEmpty(),
-                            inviteeUid = document.getString("inviteeUid").orEmpty(),
-                            inviteeEmail = document.getString("inviteeEmail").orEmpty(),
-                            inviterId = document.getString("inviterId").orEmpty(),
-                            status = InvitationStatus.PENDING,
-                            createdAt = document.getTimestamp("createdAt"),
-                            expiresAt = document.getTimestamp("expiresAt"),
-                            acceptedAt = document.getTimestamp("acceptedAt"),
-                        )
-                    }
-                    val now = Timestamp.now().toDate()
-                    trySend(invitations.filter { invitation ->
-                        invitation.expiresAt?.toDate()?.after(now) == true
-                    })
-                }
-            }
-        awaitClose { registration.remove() }
+    suspend fun create(listId: String): String {
+        val userId = requireUserId()
+        val profile = authRepository.currentProfile()
+        val inviterDisplayName = profile?.displayName
+            ?: authRepository.currentDisplayName
+            ?: "Proprietário"
+        val code = generateCode()
+        val listRef = firestore.collection("lists").document(listId)
+        val invitationRef = firestore.collection("invitations").document(code)
+        val expiresAt = Timestamp(Timestamp.now().seconds + INVITATION_LIFETIME_SECONDS, 0)
+
+        firestore.runTransaction { transaction ->
+            val list = transaction.get(listRef)
+            check(list.exists()) { "Lista não encontrada." }
+            check(list.getString("ownerId") == userId) { "NOT_AUTHORIZED" }
+            check(list.getString("status") == "ACTIVE") { "LIST_CLOSED" }
+            transaction.set(
+                invitationRef,
+                mapOf(
+                    "listId" to listId,
+                    "listName" to list.getString("name").orEmpty(),
+                    "inviterId" to userId,
+                    "inviterDisplayName" to inviterDisplayName,
+                    "status" to "PENDING",
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "expiresAt" to expiresAt,
+                    "acceptedAt" to null,
+                    "acceptedByUserId" to null,
+                ),
+            )
+        }.await()
+        return code
     }
 
-    suspend fun create(listId: String, inviteeEmail: String) {
-        require(inviteeEmail.isNotBlank()) { "O e-mail é obrigatório." }
-        functions.getHttpsCallable("createInvitation")
-            .call(mapOf("listId" to listId, "inviteeEmail" to inviteeEmail.trim().lowercase()))
-            .await()
+    suspend fun accept(rawCode: String): String {
+        val userId = requireUserId()
+        val code = normalizeCode(rawCode)
+        require(code.length == CODE_LENGTH) { "Código de convite inválido." }
+        val displayName = authRepository.currentProfile()?.displayName
+            ?: authRepository.currentDisplayName
+            ?: "Participante"
+        val invitationRef = firestore.collection("invitations").document(code)
+        var acceptedListId = ""
+
+        firestore.runTransaction { transaction ->
+            val invitation = transaction.get(invitationRef)
+            check(invitation.exists()) { "INVITATION_UNAVAILABLE" }
+            check(invitation.getString("status") == "PENDING") { "INVITATION_UNAVAILABLE" }
+            val expiresAt = invitation.getTimestamp("expiresAt")
+                ?: error("INVITATION_UNAVAILABLE")
+            check(expiresAt.toDate().after(Timestamp.now().toDate())) { "INVITATION_EXPIRED" }
+            val listId = invitation.getString("listId") ?: error("INVITATION_UNAVAILABLE")
+            val listRef = firestore.collection("lists").document(listId)
+            val memberRef = listRef.collection("members").document(userId)
+            transaction.set(
+                memberRef,
+                mapOf(
+                    "userId" to userId,
+                    "displayName" to displayName,
+                    "role" to "MEMBER",
+                    "joinedAt" to FieldValue.serverTimestamp(),
+                    "acceptedInvitationId" to code,
+                ),
+            )
+            transaction.update(
+                listRef,
+                mapOf(
+                    "memberIds" to FieldValue.arrayUnion(userId),
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+            transaction.update(
+                invitationRef,
+                mapOf(
+                    "status" to "ACCEPTED",
+                    "acceptedAt" to FieldValue.serverTimestamp(),
+                    "acceptedByUserId" to userId,
+                ),
+            )
+            acceptedListId = listId
+        }.await()
+        return acceptedListId
     }
 
-    suspend fun accept(invitationId: String): String {
-        val result = functions.getHttpsCallable("acceptInvitation")
-            .call(mapOf("invitationId" to invitationId))
-            .await()
-        @Suppress("UNCHECKED_CAST")
-        val data = result.getData() as? Map<String, Any?>
-        return data?.get("listId") as? String
-            ?: error("A lista aceita não foi informada.")
+    private fun requireUserId(): String =
+        requireNotNull(authRepository.currentUserId) { "Entre para continuar." }
+
+    private fun generateCode(): String {
+        val bytes = ByteArray(CODE_BYTES).also(random::nextBytes)
+        return bytes.joinToString("") { "%02X".format(Locale.ROOT, it.toInt() and 0xff) }
+    }
+
+    private fun normalizeCode(value: String): String =
+        value.filter(Char::isLetterOrDigit).uppercase(Locale.ROOT)
+
+    private companion object {
+        val random = SecureRandom()
+        const val CODE_BYTES = 16
+        const val CODE_LENGTH = CODE_BYTES * 2
+        const val INVITATION_LIFETIME_SECONDS = 3 * 60 * 60L
     }
 }

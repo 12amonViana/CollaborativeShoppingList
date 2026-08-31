@@ -7,7 +7,6 @@ import com.collaborativeshoppinglist.data.model.ShoppingListItem
 import com.collaborativeshoppinglist.data.source.FirestoreShoppingListDataSource
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -16,7 +15,6 @@ import javax.inject.Singleton
 @Singleton
 class ShoppingListRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val functions: FirebaseFunctions,
     private val authRepository: AuthRepository,
     private val dataSource: FirestoreShoppingListDataSource,
 ) {
@@ -156,9 +154,21 @@ class ShoppingListRepository @Inject constructor(
     }
 
     suspend fun closeList(listId: String) {
-        functions.getHttpsCallable("closeShoppingList")
-            .call(mapOf("listId" to listId))
-            .await()
+        val userId = requireUserId()
+        val listRef = firestore.collection("lists").document(listId)
+        firestore.runTransaction { transaction ->
+            val list = transaction.get(listRef)
+            check(list.getString("status") == "ACTIVE") { "LIST_CLOSED" }
+            check(list.getString("ownerId") == userId) { "NOT_AUTHORIZED" }
+            transaction.update(
+                listRef,
+                mapOf(
+                    "status" to "CLOSED",
+                    "closedAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+        }.await()
     }
 
     private fun requireUserId(): String =

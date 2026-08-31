@@ -6,13 +6,13 @@
 
 ## Resumo
 
-Implementar um aplicativo Android de listas de compras compartilhadas, com autenticação, convites, edição de itens e sincronização em tempo real. O aplicativo será desenvolvido em Kotlin com Jetpack Compose; Firebase Authentication, Cloud Firestore e Cloud Functions fornecerão autenticação, dados, autorização e operações sensíveis de convite. O Firestore será a fonte de verdade para atualizações em tempo real.
+Implementar um aplicativo Android de listas de compras compartilhadas, com autenticação, convites por código, edição de itens e sincronização em tempo real. O aplicativo será desenvolvido em Kotlin com Jetpack Compose; Firebase Authentication, Cloud Firestore e Security Rules fornecerão autenticação, dados e autorização no plano gratuito Spark. O Firestore será a fonte de verdade para atualizações em tempo real.
 
 ## Contexto Técnico
 
 **Linguagem/Versão**: Kotlin estável, com JDK 17 e SDK Android atual compatível.
 
-**Dependências Principais**: Jetpack Compose e Material 3, Navigation Compose, ViewModel, StateFlow, Hilt, Firebase Authentication, Cloud Firestore e Cloud Functions for Firebase.
+**Dependências Principais**: Jetpack Compose e Material 3, Navigation Compose, ViewModel, StateFlow, Hilt, Firebase Authentication e Cloud Firestore.
 
 **Armazenamento**: Cloud Firestore; o cache local do SDK é somente suporte de leitura, não autoridade.
 
@@ -20,11 +20,11 @@ Implementar um aplicativo Android de listas de compras compartilhadas, com auten
 
 **Plataforma-alvo**: Android.
 
-**Tipo de Projeto**: Aplicativo móvel Android com serviços Firebase gerenciados.
+**Tipo de Projeto**: Aplicativo móvel Android no plano Firebase Spark, sem conta de faturamento vinculada.
 
 **Metas de Desempenho**: 95% das alterações visíveis para participantes online em até 3 segundos; interface responsiva a 60 fps nas telas principais.
 
-**Restrições**: Controle de acesso obrigatório no servidor por Firebase Security Rules; nenhuma credencial de servidor no aplicativo; expiração de convite calculada por horário do servidor; alterações transacionais não são confirmadas ao usuário antes de confirmação do servidor.
+**Restrições**: Controle de acesso obrigatório no servidor por Firebase Security Rules; nenhuma Cloud Function ou serviço Google Cloud pago; códigos de convite com 128 bits de aleatoriedade; alterações transacionais não são confirmadas ao usuário antes da confirmação do servidor.
 
 **Escala/Escopo**: MVP com autenticação por e-mail e senha, listas colaborativas, itens, convites e fechamento de lista; sem pagamentos, catálogo, preços, IA ou notificações push.
 

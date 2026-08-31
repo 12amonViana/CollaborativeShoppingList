@@ -64,7 +64,7 @@ fun ListOverviewScreen(
                 modifier = Modifier.padding(start = 8.dp),
             ) { Text("Criar") }
         }
-        TextButton(onClick = onInvitations) { Text("Ver convites") }
+        TextButton(onClick = onInvitations) { Text("Entrar com código") }
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
         }

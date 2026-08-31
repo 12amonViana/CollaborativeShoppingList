@@ -149,3 +149,17 @@
 4. Executar a Fase 7 antes da entrega.
 
 Todas as tarefas seguem o formato obrigatório de checklist, possuem identificador, caminho e rótulo de história quando aplicável.
+
+## Fase 8: Refatoração para Firebase Spark
+
+**Objetivo**: Eliminar serviços faturáveis e preservar compartilhamento seguro usando somente Authentication, Firestore e Security Rules no plano Spark.
+
+- [X] T040 [US3] Atualizar especificação, pesquisa, modelo e contrato para convites por código em specs/001-shared-shopping-lists/
+- [X] T041 [US3] Substituir criação e aceite via Functions por transações diretas em android/app/src/main/java/com/collaborativeshoppinglist/data/repository/InvitationRepository.kt
+- [X] T042 [US3] Adaptar telas e estado de convites para geração e entrada de código em android/app/src/main/java/com/collaborativeshoppinglist/feature/invitations/
+- [X] T043 [US4] Mover encerramento da lista para transação direta em android/app/src/main/java/com/collaborativeshoppinglist/data/repository/ShoppingListRepository.kt
+- [X] T044 Reforçar criação, aceite de uso único, expiração e encerramento em firebase/firestore.rules
+- [X] T045 Remover Cloud Functions das dependências e configurações em android/app/build.gradle.kts e firebase/firebase.json
+- [X] T046 Atualizar testes do Emulator Suite para o fluxo Spark em firebase/functions/test/emulator-e2e.mjs
+- [X] T047 Atualizar instruções de execução e migração ao plano Spark em README.md
+- [X] T048 Validar build Android e testes de regras sem emulador de Functions

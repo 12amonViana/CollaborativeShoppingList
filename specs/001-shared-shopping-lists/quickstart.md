@@ -3,7 +3,7 @@
 ## Pré-requisitos
 
 - Android Studio com um emulador Android configurado.
-- Projeto Firebase configurado para Authentication, Firestore e Functions.
+- Projeto Firebase Spark configurado para Authentication e Firestore, sem faturamento vinculado.
 - Firebase CLI e Firebase Local Emulator Suite configurados para testes locais.
 - Uma conta de teste por participante.
 
@@ -20,17 +20,17 @@
 ## Cenário 2 — Colaboração em tempo real
 
 1. Entrar com duas contas em dispositivos ou emuladores distintos.
-2. Fazer a primeira conta convidar a segunda.
-3. Aceitar o convite com a segunda conta.
+2. Fazer a primeira conta gerar um código de convite e compartilhá-lo com a segunda.
+3. Informar e aceitar o código com a segunda conta.
 4. Marcar um item como colocado no carrinho com a primeira conta.
 
 **Resultado esperado**: a segunda conta vê a marcação e o responsável em até 3 segundos.
 
 ## Cenário 3 — Convite e encerramento
 
-1. Criar um convite e não aceitá-lo por mais de 3 horas no relógio do ambiente de teste.
+1. Gerar um código e não aceitá-lo por mais de 3 horas no relógio do ambiente de teste.
 2. Confirmar que ele não pode ser aceito.
-3. Criar outro convite, encerrar a lista antes do aceite e tentar aceitá-lo.
+3. Gerar outro código, encerrar a lista antes do aceite e tentar aceitá-lo.
 
 **Resultado esperado**: os dois convites são recusados; a lista encerrada permanece apenas para consulta.
 

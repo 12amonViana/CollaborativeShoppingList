@@ -1,6 +1,6 @@
 # Modelo de Dados
 
-Os horários são armazenados e avaliados em UTC. Identificadores são gerados pelo Firebase; o e-mail normalizado é o identificador usado para convites.
+Os horários são armazenados e avaliados em UTC. Identificadores de convites são códigos aleatórios de 128 bits representados por 32 caracteres hexadecimais.
 
 ## Usuário
 
@@ -57,13 +57,12 @@ Documento: invitations/{inviteId}
 | Campo | Regra |
 |---|---|
 | listId | Lista alvo |
-| inviteeEmail | E-mail normalizado do convidado |
-| inviteeUid, inviteeDisplayName | Identidade resolvida do usuário registrado convidado |
 | inviterId | UID do proprietário que convidou |
+| inviterDisplayName | Nome do proprietário exibido ao destinatário |
 | status | PENDING, ACCEPTED, EXPIRED ou INVALIDATED |
 | createdAt | Horário definido pelo servidor |
 | expiresAt | createdAt + 3 horas |
-| acceptedAt | Preenchido somente ao aceitar |
+| acceptedAt, acceptedByUserId | Preenchidos somente ao aceitar |
 
 ## Transições de Estado
 
@@ -71,4 +70,4 @@ Lista: ACTIVE → CLOSED
 Convite: PENDING → ACCEPTED, EXPIRED ou INVALIDATED  
 Item: PENDING ↔ IN_CART
 
-O encerramento invalida convites pendentes. Aceitar um convite é uma transação: valida convite pendente, expiração e lista ativa; cria a participação; e marca o convite como aceito.
+O encerramento invalida logicamente convites pendentes. Aceitar um convite é uma transação: valida código, estado pendente, expiração e lista ativa; cria a participação; atualiza a lista; e marca o convite como aceito.

@@ -62,16 +62,16 @@ Como participante de uma lista de compras, quero marcar itens como colocados no 
 
 ### História de Usuário 3 - Compartilhar e participar de uma lista (Prioridade: P1)
 
-Como proprietário de uma lista, quero compartilhá-la com outra pessoa para coordenarmos a mesma compra.
+Como proprietário de uma lista, quero gerar um código temporário para compartilhá-la com outra pessoa e coordenarmos a mesma compra sem serviços pagos.
 
 **Por que esta prioridade**: A colaboração diferencia o produto de um aplicativo de lista de compras individual.
 
-**Teste independente**: Um proprietário envia um convite, outro usuário registrado o aceita e ambos visualizam a mesma lista e seus participantes.
+**Teste independente**: Um proprietário gera e compartilha um código, outro usuário autenticado o informa no aplicativo e ambos visualizam a mesma lista e seus participantes.
 
 **Cenários de aceitação**:
 
-1. **Dado** uma lista ativa pertencente a um usuário, **Quando** o proprietário convida outro usuário registrado, **Então** o convidado pode visualizar um convite pendente.
-2. **Dado** um convite pendente, **Quando** o usuário convidado o aceita, **Então** ele obtém acesso à lista ativa e passa a constar entre seus participantes.
+1. **Dado** uma lista ativa pertencente a um usuário, **Quando** o proprietário gera um convite, **Então** recebe um código secreto e imprevisível que pode compartilhar por um meio de sua confiança.
+2. **Dado** um código de convite pendente, **Quando** um usuário autenticado o informa no aplicativo, **Então** ele obtém acesso à lista ativa e passa a constar entre seus participantes.
 3. **Dado** uma lista ativa compartilhada, **Quando** qualquer participante altera um item, **Então** todos os participantes atuais veem a alteração em tempo real.
 4. **Dado** um convite pendente, **Quando** passam-se 3 horas ou sua lista associada é fechada, **Então** o convite não pode ser aceito.
 
@@ -92,7 +92,7 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 
 ### Casos de Borda
 
-- Um convite não pode conceder acesso se já tiver sido aceito, expirado, invalidado pelo encerramento da lista, estiver associado a uma lista encerrada ou seu usuário de destino não existir mais.
+- Um convite não pode conceder acesso se já tiver sido aceito, expirado ou estiver associado a uma lista encerrada; conhecer o código é a autorização para um único usuário autenticado aceitá-lo.
 - Se dois participantes alterarem o mesmo item quase simultaneamente, a última alteração confirmada pelo sistema será o estado final único exibido para todos os participantes.
 - Um usuário que não seja participante atual não pode visualizar nem alterar uma lista compartilhada.
 - Se um item for removido após ter sido marcado, ele deixa de aparecer na lista e em seu progresso.
@@ -112,8 +112,8 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 - **RF-004**: O sistema DEVE permitir que participantes atuais de uma lista ativa marquem e desmarquem itens como colocados no carrinho.
 - **RF-005**: O sistema DEVE mostrar se cada item está pendente ou marcado e identificar o participante que marcou um item pela última vez.
 - **RF-006**: O sistema DEVE tornar adições, remoções, alterações de quantidade e alterações de status dos itens visíveis a todos os participantes atuais sem atualização manual.
-- **RF-007**: O sistema DEVE permitir que o proprietário de uma lista ativa convide outro usuário registrado para participar por meio do e-mail normalizado da conta do convidado.
-- **RF-008**: O sistema DEVE permitir que um usuário convidado aceite um convite pendente e, ao aceitá-lo, obtenha acesso à lista ativa associada.
+- **RF-007**: O sistema DEVE permitir que o proprietário de uma lista ativa gere um código de convite secreto, imprevisível e compartilhável, sem depender de serviços com cobrança por uso.
+- **RF-008**: O sistema DEVE permitir que um usuário autenticado aceite uma única vez um código de convite pendente e, ao aceitá-lo, obtenha acesso à lista ativa associada.
 - **RF-008a**: O sistema DEVE expirar um convite pendente 3 horas após sua emissão e DEVE impedir a aceitação de um convite cuja lista associada esteja encerrada.
 - **RF-009**: O sistema DEVE mostrar os participantes atuais de cada lista aos seus participantes.
 - **RF-010**: O sistema DEVE permitir somente ao proprietário encerrar uma lista ativa.
@@ -127,7 +127,7 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 - **Usuário**: Pessoa registrada que pode possuir, participar de ou ser convidada para listas de compras.
 - **Lista de Compras**: Coleção nomeada de itens com um proprietário, uma lista de participantes e status ativa ou encerrada.
 - **Item da Lista**: Entrada com nome único em uma lista de compras, quantidade de pelo menos 1, status no carrinho e participante que o marcou por último.
-- **Convite**: Solicitação pendente de um proprietário, destinada ao e-mail normalizado de outro usuário registrado, para acesso a uma lista ativa específica; expira 3 horas após ser emitida.
+- **Convite**: Código secreto de uso único gerado por um proprietário para acesso a uma lista ativa específica; possui pelo menos 128 bits de aleatoriedade e expira 3 horas após ser emitido.
 - **Participação**: Acesso aceito de um usuário a uma lista de compras específica.
 
 ## Critérios de Sucesso *(obrigatório)*
@@ -153,7 +153,8 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 ## Premissas
 
 - O MVP é direcionado a usuários Android com conexão à internet; falhas temporárias de conexão contam com um caminho claro para tentar novamente.
-- Usuários convidam outras pessoas já registradas por meio do e-mail da conta, comparado em formato normalizado e sem distinção entre letras maiúsculas e minúsculas.
+- Proprietários compartilham códigos de convite fora do aplicativo; quem recebe o código precisa autenticar-se antes de aceitá-lo.
+- O ambiente de produção opera no plano sem faturamento vinculado; ao atingir uma cota gratuita, a indisponibilidade temporária é preferível a qualquer cobrança.
 - Cada lista tem um único proprietário; transferência de propriedade e remoção de participantes estão fora do MVP.
 - Encerrar uma lista a preserva para consulta pelos participantes, mas não permite mais edição.
 - Nomes de itens equivalentes são comparados de modo consistente dentro de uma lista; a regra exata de normalização é uma decisão de planejamento.

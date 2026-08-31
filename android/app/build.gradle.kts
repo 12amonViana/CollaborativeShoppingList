@@ -48,11 +48,6 @@ android {
             "FIREBASE_FIRESTORE_EMULATOR_PORT",
             localProperty("firebase.firestoreEmulatorPort", "8080"),
         )
-        buildConfigField(
-            "int",
-            "FIREBASE_FUNCTIONS_EMULATOR_PORT",
-            localProperty("firebase.functionsEmulatorPort", "5001"),
-        )
     }
 
     buildFeatures { compose = true; buildConfig = true }
@@ -80,7 +75,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-functions")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

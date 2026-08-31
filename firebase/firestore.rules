@@ -9,18 +9,49 @@ service cloud.firestore {
       return /databases/$(database)/documents/lists/$(listId);
     }
 
+    function memberPath(listId, userId) {
+      return /databases/$(database)/documents/lists/$(listId)/members/$(userId);
+    }
+
+    function invitationPath(inviteId) {
+      return /databases/$(database)/documents/invitations/$(inviteId);
+    }
+
     function member(listId) {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/lists/$(listId)/members/$(request.auth.uid));
+      return signedIn() && exists(memberPath(listId, request.auth.uid));
     }
 
     function owner(listId) {
       return member(listId) &&
-        get(/databases/$(database)/documents/lists/$(listId)/members/$(request.auth.uid)).data.role == 'OWNER';
+        get(memberPath(listId, request.auth.uid)).data.role == 'OWNER';
     }
 
     function active(listId) {
       return get(listPath(listId)).data.status == 'ACTIVE';
+    }
+
+    function validAcceptance(inviteId, listId) {
+      let invitation = get(invitationPath(inviteId)).data;
+      let accepted = getAfter(invitationPath(inviteId)).data;
+      return invitation.listId == listId &&
+        invitation.status == 'PENDING' &&
+        invitation.expiresAt > request.time &&
+        get(listPath(listId)).data.status == 'ACTIVE' &&
+        accepted.status == 'ACCEPTED' &&
+        accepted.acceptedByUserId == request.auth.uid &&
+        accepted.acceptedAt == request.time &&
+        accepted.diff(invitation).affectedKeys().hasOnly([
+          'status', 'acceptedAt', 'acceptedByUserId'
+        ]);
+    }
+
+    function joiningWithInvitation(listId) {
+      let joinedMember = getAfter(memberPath(listId, request.auth.uid)).data;
+      return joinedMember.userId == request.auth.uid &&
+        joinedMember.role == 'MEMBER' &&
+        joinedMember.joinedAt == request.time &&
+        joinedMember.acceptedInvitationId is string &&
+        validAcceptance(joinedMember.acceptedInvitationId, listId);
     }
 
     function validItemCreate(itemId) {
@@ -65,22 +96,42 @@ service cloud.firestore {
         request.resource.data.createdAt == request.time &&
         request.resource.data.updatedAt == request.time;
       allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
-      allow update: if member(listId) &&
-        active(listId) &&
-        request.resource.data.updatedAt == request.time &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
+      allow update: if
+        (member(listId) && active(listId) &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt'])) ||
+        (owner(listId) && resource.data.status == 'ACTIVE' &&
+          request.resource.data.status == 'CLOSED' &&
+          request.resource.data.closedAt == request.time &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'closedAt', 'updatedAt'
+          ])) ||
+        (signedIn() && !(request.auth.uid in resource.data.memberIds) &&
+          request.auth.uid in request.resource.data.memberIds &&
+          request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1 &&
+          request.resource.data.memberIds.toSet() ==
+            resource.data.memberIds.toSet().union([request.auth.uid].toSet()) &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'memberIds', 'updatedAt'
+          ]) && joiningWithInvitation(listId));
       allow delete: if false;
 
       match /members/{userId} {
         allow read: if member(listId);
-        allow create: if signedIn() &&
-          userId == request.auth.uid &&
+        allow create: if signedIn() && userId == request.auth.uid &&
           request.resource.data.userId == request.auth.uid &&
           request.resource.data.displayName is string &&
           request.resource.data.displayName.size() > 0 &&
           request.resource.data.displayName.size() <= 100 &&
-          request.resource.data.role == 'OWNER' &&
-          getAfter(listPath(listId)).data.ownerId == request.auth.uid;
+          (
+            (request.resource.data.role == 'OWNER' &&
+              getAfter(listPath(listId)).data.ownerId == request.auth.uid) ||
+            (request.resource.data.role == 'MEMBER' &&
+              request.resource.data.acceptedInvitationId is string &&
+              validAcceptance(request.resource.data.acceptedInvitationId, listId))
+          );
         allow update, delete: if false;
       }
 
@@ -98,8 +149,29 @@ service cloud.firestore {
     }
 
     match /invitations/{inviteId} {
-      allow read: if signedIn() && resource.data.inviteeUid == request.auth.uid;
-      allow write: if false;
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && inviteId.size() == 32 &&
+        owner(request.resource.data.listId) && active(request.resource.data.listId) &&
+        request.resource.data.keys().hasAll([
+          'listId', 'listName', 'inviterId', 'inviterDisplayName', 'status',
+          'createdAt', 'expiresAt', 'acceptedAt', 'acceptedByUserId'
+        ]) &&
+        request.resource.data.listName ==
+          get(listPath(request.resource.data.listId)).data.name &&
+        request.resource.data.inviterId == request.auth.uid &&
+        request.resource.data.inviterDisplayName is string &&
+        request.resource.data.inviterDisplayName.size() > 0 &&
+        request.resource.data.status == 'PENDING' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.expiresAt > request.time + duration.value(179, 'm') &&
+        request.resource.data.expiresAt <= request.time + duration.value(181, 'm') &&
+        request.resource.data.acceptedAt == null &&
+        request.resource.data.acceptedByUserId == null;
+      allow update: if signedIn() && validAcceptance(inviteId, resource.data.listId) &&
+        getAfter(listPath(resource.data.listId)).data.memberIds.hasAny([request.auth.uid]) &&
+        getAfter(memberPath(resource.data.listId, request.auth.uid)).data.role == 'MEMBER';
+      allow delete: if false;
     }
 
     match /{document=**} {

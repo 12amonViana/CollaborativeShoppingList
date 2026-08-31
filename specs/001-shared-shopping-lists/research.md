@@ -10,11 +10,11 @@
 
 ## Dados, autenticação e tempo real
 
-**Decisão**: Firebase Authentication por e-mail e senha, Cloud Firestore e Cloud Functions para criação e aceite de convites.
+**Decisão**: Firebase Authentication por e-mail e senha e Cloud Firestore no plano Spark. Convites usam códigos aleatórios de 128 bits e transações diretas protegidas por Security Rules.
 
-**Justificativa**: O Firestore fornece listeners em tempo real, transações atômicas e SDK Android. Authentication e Security Rules permitem limitar dados aos participantes; Functions protegem operações de convite que envolvem múltiplos documentos e expiração.
+**Justificativa**: O Firestore fornece listeners e transações atômicas. Authentication e Security Rules limitam dados aos participantes e validam em conjunto convite, participação e lista. A ausência de faturamento vinculado elimina cobranças automáticas; exceder a cota causa indisponibilidade em vez de custo.
 
-**Alternativas consideradas**: Supabase e backend próprio. Ambos são viáveis, mas exigem mais infraestrutura e configuração de autenticação, persistência e sincronização para o MVP.
+**Alternativas consideradas**: Cloud Functions, Supabase e backend próprio. Foram rejeitados porque exigem faturamento ou infraestrutura adicional. Convite direcionado por e-mail também foi rejeitado por exigir resolução privilegiada de identidade ou exposição do diretório de usuários.
 
 ## Concorrência e conectividade
 
