@@ -1,0 +1,3 @@
+package com.collaborativeshoppinglist.feature.invitations
+
+internal object InvitationsFeature

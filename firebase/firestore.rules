@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function listPath(listId) {
+      return /databases/$(database)/documents/lists/$(listId);
+    }
+
+    function member(listId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/lists/$(listId)/members/$(request.auth.uid));
+    }
+
+    function owner(listId) {
+      return member(listId) &&
+        get(/databases/$(database)/documents/lists/$(listId)/members/$(request.auth.uid)).data.role == 'OWNER';
+    }
+
+    function active(listId) {
+      return get(listPath(listId)).data.status == 'ACTIVE';
+    }
+
+    function validItemCreate(itemId) {
+      return request.resource.data.keys().hasAll([
+          'name', 'normalizedName', 'quantity', 'inCart', 'updatedAt', 'updatedByUserId'
+        ]) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 120 &&
+        request.resource.data.normalizedName == itemId &&
+        request.resource.data.quantity == 1 &&
+        request.resource.data.inCart == false &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.updatedByUserId == request.auth.uid;
+    }
+
+    function validItemUpdate() {
+      return request.resource.data.name == resource.data.name &&
+        request.resource.data.normalizedName == resource.data.normalizedName &&
+        request.resource.data.quantity is int &&
+        request.resource.data.quantity >= 1 &&
+        request.resource.data.inCart is bool &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.updatedByUserId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'quantity', 'inCart', 'lastMarkedByUserId', 'updatedAt', 'updatedByUserId'
+        ]) &&
+        (
+          request.resource.data.inCart == resource.data.inCart ||
+          (request.resource.data.inCart == true &&
+            request.resource.data.lastMarkedByUserId == request.auth.uid) ||
+          (request.resource.data.inCart == false &&
+            request.resource.data.lastMarkedByUserId == null)
+        );
+    }
+
+    match /lists/{listId} {
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.status == 'ACTIVE' &&
+        request.resource.data.memberIds == [request.auth.uid] &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow update: if member(listId) &&
+        active(listId) &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
+      allow delete: if false;
+
+      match /members/{userId} {
+        allow read: if member(listId);
+        allow create: if signedIn() &&
+          userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid &&
+          request.resource.data.displayName is string &&
+          request.resource.data.displayName.size() > 0 &&
+          request.resource.data.displayName.size() <= 100 &&
+          request.resource.data.role == 'OWNER' &&
+          getAfter(listPath(listId)).data.ownerId == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      match /items/{itemId} {
+        allow read: if member(listId);
+        allow create: if member(listId) && active(listId) && validItemCreate(itemId);
+        allow update: if member(listId) && active(listId) && validItemUpdate();
+        allow delete: if member(listId) && active(listId);
+      }
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /invitations/{inviteId} {
+      allow read: if signedIn() && resource.data.inviteeUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

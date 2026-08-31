@@ -1,0 +1,31 @@
+# Android e Kotlin
+.gradle/
+.gradle-cache/
+.gradle-project-cache/
+.android-user/
+.build-logs/
+**/build/
+out/
+*.class
+*.jar
+*.iml
+.idea/
+local.properties
+
+# Firebase e segredos
+google-services.json
+.firebaserc.local
+.env
+.env.*
+
+# Node.js e Cloud Functions
+node_modules/
+firebase/functions/node_modules/
+firebase/functions/lib/
+*.log
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
