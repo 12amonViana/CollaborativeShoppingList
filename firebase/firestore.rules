@@ -54,14 +54,50 @@ service cloud.firestore {
         validAcceptance(joinedMember.acceptedInvitationId, listId);
     }
 
+    function leavingAsMember(listId) {
+      return member(listId) &&
+        get(listPath(listId)).data.ownerId != request.auth.uid &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        !(request.auth.uid in request.resource.data.memberIds) &&
+        request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1 &&
+        request.resource.data.memberIds.toSet().union([request.auth.uid].toSet()) ==
+          resource.data.memberIds.toSet() &&
+        !existsAfter(memberPath(listId, request.auth.uid)) &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'memberIds', 'updatedAt'
+        ]);
+    }
+
+    function transferringOwnership(listId) {
+      let newOwnerId = request.resource.data.ownerId;
+      return owner(listId) &&
+        newOwnerId != request.auth.uid &&
+        newOwnerId in resource.data.memberIds &&
+        newOwnerId in request.resource.data.memberIds &&
+        !(request.auth.uid in request.resource.data.memberIds) &&
+        request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1 &&
+        request.resource.data.memberIds.toSet().union([request.auth.uid].toSet()) ==
+          resource.data.memberIds.toSet() &&
+        getAfter(memberPath(listId, newOwnerId)).data.role == 'OWNER' &&
+        !existsAfter(memberPath(listId, request.auth.uid)) &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ownerId', 'memberIds', 'updatedAt'
+        ]);
+    }
+
     function validItemCreate(itemId) {
       return request.resource.data.keys().hasAll([
-          'name', 'normalizedName', 'quantity', 'inCart', 'updatedAt', 'updatedByUserId'
+          'name', 'normalizedName', 'category', 'quantity', 'inCart', 'updatedAt', 'updatedByUserId'
         ]) &&
         request.resource.data.name is string &&
         request.resource.data.name.size() > 0 &&
         request.resource.data.name.size() <= 120 &&
         request.resource.data.normalizedName == itemId &&
+        request.resource.data.category in [
+          'COLD_CUTS_AND_DAIRY', 'BUTCHER', 'PRODUCE', 'CLEANING', 'FROZEN', 'OTHER'
+        ] &&
         request.resource.data.quantity == 1 &&
         request.resource.data.inCart == false &&
         request.resource.data.updatedAt == request.time &&
@@ -71,6 +107,8 @@ service cloud.firestore {
     function validItemUpdate() {
       return request.resource.data.name == resource.data.name &&
         request.resource.data.normalizedName == resource.data.normalizedName &&
+        request.resource.data.get('category', 'OTHER') ==
+          resource.data.get('category', 'OTHER') &&
         request.resource.data.quantity is int &&
         request.resource.data.quantity >= 1 &&
         request.resource.data.inCart is bool &&
@@ -86,6 +124,24 @@ service cloud.firestore {
           (request.resource.data.inCart == false &&
             request.resource.data.lastMarkedByUserId == null)
         );
+    }
+
+    function validItemReset(listId) {
+      return owner(listId) &&
+        get(listPath(listId)).data.status == 'CLOSED' &&
+        getAfter(listPath(listId)).data.status == 'ACTIVE' &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.normalizedName == resource.data.normalizedName &&
+        request.resource.data.get('category', 'OTHER') ==
+          resource.data.get('category', 'OTHER') &&
+        request.resource.data.quantity == 1 &&
+        request.resource.data.inCart == false &&
+        request.resource.data.lastMarkedByUserId == null &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.updatedByUserId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'quantity', 'inCart', 'lastMarkedByUserId', 'updatedAt', 'updatedByUserId'
+        ]);
     }
 
     match /lists/{listId} {
@@ -107,6 +163,21 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'closedAt', 'updatedAt'
           ])) ||
+        (owner(listId) &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 100 &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'updatedAt'
+          ])) ||
+        (owner(listId) && resource.data.status == 'CLOSED' &&
+          request.resource.data.status == 'ACTIVE' &&
+          request.resource.data.closedAt == null &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'closedAt', 'updatedAt'
+          ])) ||
         (signedIn() && !(request.auth.uid in resource.data.memberIds) &&
           request.auth.uid in request.resource.data.memberIds &&
           request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1 &&
@@ -115,8 +186,10 @@ service cloud.firestore {
           request.resource.data.updatedAt == request.time &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'memberIds', 'updatedAt'
-          ]) && joiningWithInvitation(listId));
-      allow delete: if false;
+          ]) && joiningWithInvitation(listId)) ||
+        leavingAsMember(listId) ||
+        transferringOwnership(listId);
+      allow delete: if owner(listId);
 
       match /members/{userId} {
         allow read: if member(listId);
@@ -132,14 +205,24 @@ service cloud.firestore {
               request.resource.data.acceptedInvitationId is string &&
               validAcceptance(request.resource.data.acceptedInvitationId, listId))
           );
-        allow update, delete: if false;
+        allow update: if owner(listId) &&
+          resource.data.role == 'MEMBER' &&
+          request.resource.data.role == 'OWNER' &&
+          getAfter(listPath(listId)).data.ownerId == userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
+        allow delete: if owner(listId) ||
+          (signedIn() && userId == request.auth.uid &&
+            !(request.auth.uid in getAfter(listPath(listId)).data.memberIds));
       }
 
       match /items/{itemId} {
         allow read: if member(listId);
         allow create: if member(listId) && active(listId) && validItemCreate(itemId);
-        allow update: if member(listId) && active(listId) && validItemUpdate();
-        allow delete: if member(listId) && active(listId);
+        allow update: if
+          (member(listId) && active(listId) && validItemUpdate()) ||
+          validItemReset(listId);
+        allow delete: if
+          (member(listId) && active(listId)) || owner(listId);
       }
     }
 

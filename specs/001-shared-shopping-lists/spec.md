@@ -109,6 +109,9 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 - **RF-003**: O sistema DEVE permitir que participantes atuais de uma lista ativa adicionem itens nomeados, alterem uma quantidade e removam itens; cada novo item DEVE começar com quantidade 1.
 - **RF-003a**: O sistema DEVE exigir um nome de item e uma quantidade de pelo menos 1; ele DEVE impedir que uma diminuição deixe a quantidade abaixo de 1.
 - **RF-003b**: Quando um participante adicionar um item com o mesmo nome de um item existente na mesma lista, o sistema DEVE aumentar a quantidade do item existente em vez de criar um duplicado.
+- **RF-003c**: Ao adicionar um item, o sistema DEVE permitir escolher exatamente uma das categorias: 🧀 Frios e Laticínios, 🥩 Açougue, 🥬 Hortifrut, 🧹 Limpeza, ❄️ Congelados ou 📦 Outros.
+- **RF-003d**: O sistema DEVE agrupar os itens por categoria na ordem definida em RF-003c e DEVE tratar itens anteriores sem categoria como 📦 Outros.
+- **RF-003e**: Quando um nome duplicado for adicionado, o sistema DEVE preservar a categoria do item existente.
 - **RF-004**: O sistema DEVE permitir que participantes atuais de uma lista ativa marquem e desmarquem itens como colocados no carrinho.
 - **RF-005**: O sistema DEVE mostrar se cada item está pendente ou marcado e identificar o participante que marcou um item pela última vez.
 - **RF-006**: O sistema DEVE tornar adições, remoções, alterações de quantidade e alterações de status dos itens visíveis a todos os participantes atuais sem atualização manual.
@@ -121,12 +124,22 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 - **RF-012**: O sistema DEVE restringir a visualização e as alterações de uma lista ao proprietário e aos participantes aceitos.
 - **RF-012a**: Quando alterações simultâneas afetarem o mesmo item, o sistema DEVE preservar e distribuir a última alteração que confirmar como estado final do item.
 - **RF-013**: O MVP NÃO DEVE incluir integrações com supermercados, preços ou comparação de preços, leitura de código de barras, recursos de inteligência artificial, sugestões automáticas de produtos, localização do supermercado, pagamentos, histórico avançado de compras, notificações push ou sincronização com calendário.
+- **RF-014**: O proprietário DEVE poder renomear uma lista, desde que não exista outra lista ativa de sua propriedade com nome equivalente.
+- **RF-015**: O proprietário DEVE poder reativar uma lista encerrada quando não existir outra lista ativa de sua propriedade com nome equivalente.
+- **RF-015a**: Ao reativar uma lista, o sistema DEVE preservar seus itens e categorias, definir todas as quantidades como 1 e marcar todos os itens como pendentes sem responsável pela última marcação.
+- **RF-016**: O proprietário DEVE poder excluir permanentemente uma lista ativa ou encerrada; participantes não proprietários NÃO DEVEM poder excluí-la.
+- **RF-017**: A tela de listas DEVE apresentar um indicador visual antes do nome que diferencie claramente listas ativas e encerradas.
+- **RF-018**: A seleção de categoria ao adicionar um item DEVE ser explicitamente identificada como um controle interativo e mostrar a categoria atualmente selecionada.
+- **RF-019**: Um participante convidado DEVE poder abandonar uma lista, removendo apenas o próprio acesso e preservando a lista para os demais participantes.
+- **RF-020**: O proprietário DEVE poder abandonar uma lista que possua outros participantes; nesse caso, o participante com ingresso mais antigo DEVE tornar-se proprietário e o proprietário anterior DEVE perder o acesso.
+- **RF-020a**: Se o proprietário abandonar uma lista sem outros participantes, a lista e seus itens DEVEM ser excluídos.
+- **RF-020b**: A saída e eventual transferência de propriedade DEVEM ocorrer como uma única alteração confirmada, sem deixar a lista sem proprietário.
 
 ### Entidades Principais *(incluir se a funcionalidade envolver dados)*
 
 - **Usuário**: Pessoa registrada que pode possuir, participar de ou ser convidada para listas de compras.
 - **Lista de Compras**: Coleção nomeada de itens com um proprietário, uma lista de participantes e status ativa ou encerrada.
-- **Item da Lista**: Entrada com nome único em uma lista de compras, quantidade de pelo menos 1, status no carrinho e participante que o marcou por último.
+- **Item da Lista**: Entrada com nome único em uma lista de compras, uma categoria predefinida, quantidade de pelo menos 1, status no carrinho e participante que o marcou por último.
 - **Convite**: Código secreto de uso único gerado por um proprietário para acesso a uma lista ativa específica; possui pelo menos 128 bits de aleatoriedade e expira 3 horas após ser emitido.
 - **Participação**: Acesso aceito de um usuário a uma lista de compras específica.
 
@@ -139,6 +152,9 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 - **CS-003**: Pelo menos 95% dos usuários convidados conseguem aceitar um convite e acessar a lista compartilhada em até 1 minuto após abri-lo.
 - **CS-004**: Em testes de usabilidade, pelo menos 90% dos participantes conseguem identificar sem ajuda quais itens permanecem pendentes e quem marcou um item concluído.
 - **CS-005**: Pelo menos 95% das tentativas de alterar uma lista encerrada são impedidas, preservando seu estado final.
+- **CS-006**: Em testes de usabilidade, pelo menos 90% das pessoas conseguem adicionar um item à categoria desejada e encontrá-lo no grupo correspondente sem ajuda.
+- **CS-007**: Pelo menos 90% dos proprietários conseguem identificar o estado de uma lista, renomeá-la ou reativá-la em até 30 segundos sem ajuda.
+- **CS-008**: Em 100 tentativas de abandono, nenhuma lista com participantes restantes fica sem proprietário e nenhum usuário que saiu conserva acesso.
 
 ### Protocolo de Validação dos Critérios de Sucesso
 
@@ -159,3 +175,4 @@ Como proprietário de uma lista, quero encerrá-la ao concluir a compra para que
 - Encerrar uma lista a preserva para consulta pelos participantes, mas não permite mais edição.
 - Nomes de itens equivalentes são comparados de modo consistente dentro de uma lista; a regra exata de normalização é uma decisão de planejamento.
 - As exclusões enumeradas neste documento são limites intencionais do MVP.
+- Itens existentes que ainda não possuem categoria são exibidos em 📦 Outros, sem exigir migração ou serviço faturável.

@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.collaborativeshoppinglist.data.model.ShoppingListStatus
 
 @Composable
 fun ListOverviewScreen(
@@ -78,8 +79,23 @@ fun ListOverviewScreen(
                             .clickable { onListSelected(list.id) }
                             .padding(vertical = 16.dp),
                     ) {
-                        Text(list.name, style = MaterialTheme.typography.titleMedium)
-                        Text(if (list.status.name == "ACTIVE") "Ativa" else "Encerrada")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (list.status == ShoppingListStatus.ACTIVE) "🟢" else "🔒",
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            Column {
+                                Text(list.name, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    if (list.status == ShoppingListStatus.ACTIVE) "Ativa" else "Encerrada",
+                                    color = if (list.status == ShoppingListStatus.ACTIVE) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                            }
+                        }
                     }
                     HorizontalDivider()
                 }

@@ -5,6 +5,7 @@ import {
   arrayUnion,
   collection,
   connectFirestoreEmulator,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -53,7 +54,7 @@ async function createList(account, listId, name) {
   await batch.commit();
 }
 
-async function addItem(account, listId, rawName) {
+async function addItem(account, listId, rawName, category = "OTHER") {
   const itemId = normalizedName(rawName);
   const listRef = doc(account.firestore, "lists", listId);
   const itemRef = doc(account.firestore, "lists", listId, "items", itemId);
@@ -67,6 +68,7 @@ async function addItem(account, listId, rawName) {
     } else {
       transaction.set(itemRef, {
         name: rawName.trim().replace(/\s+/g, " "), normalizedName: itemId,
+        category,
         quantity: 1, inCart: false, lastMarkedByUserId: null,
         updatedAt: serverTimestamp(), updatedByUserId: account.user.uid,
       });
@@ -132,9 +134,27 @@ async function main() {
     const listId = "compra-semana";
     await createList(owner, listId, "Compra da semana");
 
-    const milkRef = await addItem(owner, listId, "Leite");
+    const milkRef = await addItem(owner, listId, "Leite", "COLD_CUTS_AND_DAIRY");
     await addItem(owner, listId, " leite ");
     assert.equal((await getDoc(milkRef)).data().quantity, 2);
+    assert.equal((await getDoc(milkRef)).data().category, "COLD_CUTS_AND_DAIRY");
+    await assertFails(setDoc(doc(owner.firestore, "lists", listId, "items", "invalido"), {
+      name: "Inválido", normalizedName: "invalido", category: "INVALID",
+      quantity: 1, inCart: false, lastMarkedByUserId: null,
+      updatedAt: serverTimestamp(), updatedByUserId: owner.user.uid,
+    }));
+    const legacyRef = doc(owner.firestore, "lists", listId, "items", "item-legado");
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), legacyRef.path), {
+        name: "Item legado", normalizedName: "item-legado", quantity: 1,
+        inCart: false, lastMarkedByUserId: null,
+        updatedAt: Timestamp.now(), updatedByUserId: owner.user.uid,
+      });
+    });
+    await updateDoc(legacyRef, {
+      quantity: 2, updatedAt: serverTimestamp(), updatedByUserId: owner.user.uid,
+    });
+    assert.equal((await getDoc(legacyRef)).data().quantity, 2);
     await assertFails(updateDoc(milkRef, {
       quantity: 0, updatedAt: serverTimestamp(), updatedByUserId: owner.user.uid,
     }));
@@ -190,7 +210,75 @@ async function main() {
       quantity: 5, updatedAt: serverTimestamp(), updatedByUserId: member.user.uid,
     }));
 
-    console.log("E2E_OK: Spark, regras, convite por código, tempo real, expiração e encerramento.");
+    await assertFails(updateDoc(doc(member.firestore, "lists", listId), {
+      status: "ACTIVE", closedAt: null, updatedAt: serverTimestamp(),
+    }));
+    const reactivateBatch = writeBatch(owner.firestore);
+    reactivateBatch.update(doc(owner.firestore, "lists", listId), {
+      status: "ACTIVE", closedAt: null, updatedAt: serverTimestamp(),
+    });
+    for (const itemRef of [milkRef, legacyRef]) {
+      reactivateBatch.update(itemRef, {
+        quantity: 1, inCart: false, lastMarkedByUserId: null,
+        updatedAt: serverTimestamp(), updatedByUserId: owner.user.uid,
+      });
+    }
+    await reactivateBatch.commit();
+    const resetMilk = (await getDoc(milkRef)).data();
+    assert.equal(resetMilk.quantity, 1);
+    assert.equal(resetMilk.inCart, false);
+    assert.equal(resetMilk.category, "COLD_CUTS_AND_DAIRY");
+
+    await updateDoc(doc(owner.firestore, "lists", listId), {
+      name: "Compra mensal", updatedAt: serverTimestamp(),
+    });
+    await assertFails(updateDoc(doc(member.firestore, "lists", listId), {
+      name: "Nome indevido", updatedAt: serverTimestamp(),
+    }));
+    await assertFails(deleteDoc(doc(member.firestore, "lists", listId)));
+
+    const memberLeaveBatch = writeBatch(member.firestore);
+    memberLeaveBatch.update(doc(member.firestore, "lists", listId), {
+      memberIds: [owner.user.uid], updatedAt: serverTimestamp(),
+    });
+    memberLeaveBatch.delete(doc(member.firestore, "lists", listId, "members", member.user.uid));
+    await memberLeaveBatch.commit();
+    await assertFails(getDoc(doc(member.firestore, "lists", listId)));
+
+    const secondCode = "ABCDEF0123456789ABCDEF0123456789";
+    await createInvitation(
+      owner,
+      listId,
+      secondCode,
+      Timestamp.fromMillis(Date.now() + 3 * 60 * 60 * 1000),
+    );
+    assert.equal(await acceptInvitation(member, secondCode), listId);
+
+    const transferBatch = writeBatch(owner.firestore);
+    transferBatch.update(doc(owner.firestore, "lists", listId), {
+      ownerId: member.user.uid,
+      memberIds: [member.user.uid],
+      updatedAt: serverTimestamp(),
+    });
+    transferBatch.update(doc(owner.firestore, "lists", listId, "members", member.user.uid), {
+      role: "OWNER",
+    });
+    transferBatch.delete(doc(owner.firestore, "lists", listId, "members", owner.user.uid));
+    await transferBatch.commit();
+    assert.equal((await getDoc(doc(member.firestore, "lists", listId))).data().ownerId, member.user.uid);
+    await assertFails(getDoc(doc(owner.firestore, "lists", listId)));
+
+    const deleteBatch = writeBatch(member.firestore);
+    deleteBatch.delete(doc(member.firestore, milkRef.path));
+    deleteBatch.delete(doc(member.firestore, legacyRef.path));
+    deleteBatch.delete(doc(member.firestore, "lists", listId, "members", member.user.uid));
+    deleteBatch.delete(doc(member.firestore, "lists", listId));
+    await deleteBatch.commit();
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      assert.equal((await getDoc(doc(context.firestore(), "lists", listId))).exists(), false);
+    });
+
+    console.log("E2E_OK: saída, transferência de propriedade, exclusão e regras Spark.");
   } finally {
     await testEnvironment.cleanup();
     await Promise.all(apps.map(deleteApp));

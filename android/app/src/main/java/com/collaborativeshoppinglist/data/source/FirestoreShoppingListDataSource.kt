@@ -1,6 +1,7 @@
 package com.collaborativeshoppinglist.data.source
 
 import com.collaborativeshoppinglist.data.model.Membership
+import com.collaborativeshoppinglist.data.model.ItemCategory
 import com.collaborativeshoppinglist.data.model.MembershipRole
 import com.collaborativeshoppinglist.data.model.ShoppingList
 import com.collaborativeshoppinglist.data.model.ShoppingListItem
@@ -96,6 +97,7 @@ class FirestoreShoppingListDataSource @Inject constructor(
             id = document.id,
             name = name,
             normalizedName = document.getString("normalizedName") ?: document.id,
+            category = ItemCategory.fromStored(document.getString("category")),
             quantity = document.getLong("quantity")?.toInt() ?: 1,
             inCart = document.getBoolean("inCart") ?: false,
             lastMarkedByUserId = document.getString("lastMarkedByUserId"),

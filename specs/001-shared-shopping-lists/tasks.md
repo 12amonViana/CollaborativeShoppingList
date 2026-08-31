@@ -163,3 +163,38 @@ Todas as tarefas seguem o formato obrigatório de checklist, possuem identificad
 - [X] T046 Atualizar testes do Emulator Suite para o fluxo Spark em firebase/functions/test/emulator-e2e.mjs
 - [X] T047 Atualizar instruções de execução e migração ao plano Spark em README.md
 - [X] T048 Validar build Android e testes de regras sem emulador de Functions
+
+---
+
+## Fase 9: Categorias de Itens
+
+**Objetivo**: Organizar os itens em seis categorias fixas, sem alterar o custo operacional no Firebase Spark.
+
+- [X] T049 [US1] Registrar categorias, compatibilidade com itens antigos e critérios de aceite nos artefatos em specs/001-shared-shopping-lists/
+- [X] T050 [US1] Adicionar categoria ao modelo, persistência e leitura com fallback para Outros em android/app/src/main/java/com/collaborativeshoppinglist/data/
+- [X] T051 [US1] Adicionar seletor de categoria e agrupamento ordenado na tela em android/app/src/main/java/com/collaborativeshoppinglist/feature/lists/
+- [X] T052 [US1] Validar categorias permitidas e compatibilidade retroativa em firebase/firestore.rules
+- [X] T053 Validar build Android e testes do Emulator Suite com categorias
+
+---
+
+## Fase 10: Ciclo de Vida e Usabilidade das Listas
+
+- [X] T054 Registrar requisitos de renomeação, reativação, exclusão, status e categoria nos artefatos da especificação
+- [X] T055 Implementar validação de nomes ativos, renomeação, reativação e exclusão em ShoppingListRepository.kt
+- [X] T056 Expor as novas ações em ListDetailViewModel.kt e ListDetailScreen.kt
+- [X] T057 Melhorar os indicadores de status em ListOverviewScreen.kt e tornar explícito o seletor de categoria em ListDetailScreen.kt
+- [X] T058 Atualizar firebase/firestore.rules para restringir as novas operações ao proprietário e validar a reinicialização dos itens
+- [X] T059 Ampliar os testes do Emulator Suite para renomear, reativar, excluir e impedir operações não autorizadas
+- [X] T060 Validar build Android e testes de regras
+
+---
+
+## Fase 11: Abandono e Transferência de Propriedade
+
+- [X] T061 Registrar abandono, promoção do participante mais antigo e exclusão da lista individual nos artefatos
+- [X] T062 Implementar abandono e transferência atômica em ShoppingListRepository.kt
+- [X] T063 Expor ação e confirmação de abandono em ListDetailViewModel.kt e ListDetailScreen.kt
+- [X] T064 Restringir saída e promoção do novo proprietário em firebase/firestore.rules
+- [X] T065 Testar saída de convidado, transferência do proprietário e exclusão da lista individual no Emulator Suite
+- [X] T066 Validar build Android e testes de regras

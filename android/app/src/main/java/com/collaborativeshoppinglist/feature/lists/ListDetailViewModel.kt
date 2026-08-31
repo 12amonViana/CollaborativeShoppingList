@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.collaborativeshoppinglist.core.error.AppErrorMapper
 import com.collaborativeshoppinglist.data.model.Membership
+import com.collaborativeshoppinglist.data.model.ItemCategory
 import com.collaborativeshoppinglist.data.model.ShoppingList
 import com.collaborativeshoppinglist.data.model.ShoppingListItem
 import com.collaborativeshoppinglist.data.model.ShoppingListStatus
@@ -51,13 +52,25 @@ class ListDetailViewModel @Inject constructor(
     }
 
     fun retry() = observe()
-    fun addItem(name: String) = perform { repository.addItem(listId, name) }
+    fun addItem(name: String, category: ItemCategory) =
+        perform(action = { repository.addItem(listId, name, category) })
     fun updateQuantity(itemId: String, quantity: Int) =
-        perform { repository.updateQuantity(listId, itemId, quantity) }
-    fun removeItem(itemId: String) = perform { repository.removeItem(listId, itemId) }
+        perform(action = { repository.updateQuantity(listId, itemId, quantity) })
+    fun removeItem(itemId: String) =
+        perform(action = { repository.removeItem(listId, itemId) })
     fun setCartStatus(itemId: String, inCart: Boolean) =
-        perform { repository.setCartStatus(listId, itemId, inCart) }
-    fun closeList() = perform { repository.closeList(listId) }
+        perform(action = { repository.setCartStatus(listId, itemId, inCart) })
+    fun closeList() = perform(action = { repository.closeList(listId) })
+    fun renameList(name: String) = perform(action = { repository.renameList(listId, name) })
+    fun reactivateList() = perform(action = { repository.reactivateList(listId) })
+    fun deleteList(onDeleted: () -> Unit) = perform(
+        action = { repository.deleteList(listId) },
+        onSuccess = onDeleted,
+    )
+    fun leaveList(onLeft: () -> Unit) = perform(
+        action = { repository.leaveList(listId) },
+        onSuccess = onLeft,
+    )
 
     private fun observe() {
         observationJob?.cancel()
@@ -81,12 +94,15 @@ class ListDetailViewModel @Inject constructor(
         }
     }
 
-    private fun perform(action: suspend () -> Unit) {
+    private fun perform(action: suspend () -> Unit, onSuccess: () -> Unit = {}) {
         if (_state.value.isWorking) return
         viewModelScope.launch {
             _state.update { it.copy(isWorking = true, error = null) }
             runCatching { action() }
-                .onSuccess { _state.update { it.copy(isWorking = false) } }
+                .onSuccess {
+                    _state.update { it.copy(isWorking = false) }
+                    onSuccess()
+                }
                 .onFailure(::showError)
         }
     }

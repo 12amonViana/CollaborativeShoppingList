@@ -11,11 +11,15 @@
 
 1. Registrar uma conta e entrar.
 2. Criar uma lista chamada “Compra da semana”.
-3. Adicionar “Leite”; confirmar quantidade 1.
+3. Adicionar “Leite” em 🧀 Frios e Laticínios; confirmar quantidade 1 e o agrupamento correto.
 4. Adicionar “ leite ”; confirmar que o mesmo item passa a ter quantidade 2.
 5. Tentar definir quantidade 0; confirmar que a alteração é recusada.
 
 **Resultado esperado**: somente um item equivalente existe, com quantidade mínima 1.
+
+6. Adicionar um item em cada categoria e confirmar a ordem: Frios e Laticínios, Açougue, Hortifrut, Limpeza, Congelados e Outros.
+
+**Resultado esperado das categorias**: cada item aparece somente no grupo escolhido; documentos antigos sem categoria aparecem em Outros.
 
 ## Cenário 2 — Colaboração em tempo real
 
