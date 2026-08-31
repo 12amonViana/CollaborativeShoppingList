@@ -31,3 +31,6 @@ firebase/functions/lib/
 Thumbs.db
 *.tmp
 *.swp
+
+# Artefatos locais de distribuição
+dist/*.apk
